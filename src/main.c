@@ -97,8 +97,8 @@ int main(int argc, char **argv) {
 		switch (opt) {
 
 		case 'h' /* --help */ :
-			printf("usage: %s [OPTION]...\n\n"
-					"options:\n"
+			printf("usage: %s [OPTION]...\n"
+					"\noptions:\n"
 					"  -h, --help\t\tprint this help and exit\n"
 					"  -V, --version\t\tprint version and exit\n"
 					"  -i, --device=hciX\tHCI device to use\n"
@@ -151,18 +151,18 @@ int main(int argc, char **argv) {
 		}
 
 		case 1 /* --disable-a2dp */ :
-			config.enable_a2dp = FALSE;
+			config.enable_a2dp = false;
 			break;
 		case 2 /* --disable-hsp */ :
-			config.enable_hsp = FALSE;
+			config.enable_hsp = false;
 			break;
 		case 3 /* --disable-hfp */ :
-			config.enable_hfp = FALSE;
+			config.enable_hfp = false;
 			break;
 
 #if ENABLE_AAC
 		case 4 /* --aac-afterburner */ :
-			config.aac_afterburner = TRUE;
+			config.aac_afterburner = true;
 			break;
 		case 5 /* --aac-vbr-mode=NB */ :
 			config.aac_vbr_mode = atoi(optarg);
@@ -174,13 +174,13 @@ int main(int argc, char **argv) {
 #endif
 
 		case 6 /* --a2dp-force-mono */ :
-			config.a2dp_force_mono = TRUE;
+			config.a2dp_force_mono = true;
 			break;
 		case 7 /* --a2dp-force-audio-cd */ :
-			config.a2dp_force_44100 = TRUE;
+			config.a2dp_force_44100 = true;
 			break;
 		case 8 /* --a2dp-volume */ :
-			config.a2dp_volume = TRUE;
+			config.a2dp_volume = true;
 			break;
 
 		default:
@@ -214,8 +214,7 @@ int main(int argc, char **argv) {
 
 	bluez_subscribe_signals();
 
-	if (config.enable_a2dp)
-		bluez_register_a2dp();
+	bluez_register_a2dp();
 	bluez_register_hfp();
 
 	struct sigaction sigact = { .sa_handler = main_loop_stop };
