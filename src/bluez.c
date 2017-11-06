@@ -28,7 +28,7 @@
 
 /**
  * Get D-Bus object reference count for given profile. */
-static int bluez_get_dbus_object_count(enum bluetooth_profile profile, unsigned char codec) {
+static int bluez_get_dbus_object_count(enum bluetooth_profile profile, uint16_t codec) {
 
 	GHashTableIter iter;
 	struct ba_dbus_object *obj;
@@ -209,6 +209,47 @@ static void bluez_endpoint_select_configuration(GDBusMethodInvocation *inv, void
 	}
 #endif
 
+#if ENABLE_APTX
+	case A2DP_CODEC_VENDOR_APTX: {
+
+		if (size != sizeof(a2dp_aptx_t)) {
+			error("Invalid capabilities size: %zu != %zu", size, sizeof(a2dp_aptx_t));
+			goto fail;
+		}
+
+		a2dp_aptx_t *cap = (a2dp_aptx_t *)capabilities;
+
+		if (config.a2dp_force_44100 &&
+				cap->frequency & APTX_SAMPLING_FREQ_44100)
+			cap->frequency = APTX_SAMPLING_FREQ_44100;
+		else if (cap->frequency & APTX_SAMPLING_FREQ_48000)
+			cap->frequency = APTX_SAMPLING_FREQ_48000;
+		else if (cap->frequency & APTX_SAMPLING_FREQ_44100)
+			cap->frequency = APTX_SAMPLING_FREQ_44100;
+		else if (cap->frequency & APTX_SAMPLING_FREQ_32000)
+			cap->frequency = APTX_SAMPLING_FREQ_32000;
+		else if (cap->frequency & APTX_SAMPLING_FREQ_16000)
+			cap->frequency = APTX_SAMPLING_FREQ_16000;
+		else {
+			error("No supported sampling frequencies: 0x%x", cap->frequency);
+			goto fail;
+		}
+
+		if (cap->channel_mode & APTX_CHANNEL_MODE_JOINT_STEREO)
+			cap->channel_mode = APTX_CHANNEL_MODE_JOINT_STEREO;
+		else if (cap->channel_mode & APTX_CHANNEL_MODE_STEREO)
+			cap->channel_mode = APTX_CHANNEL_MODE_STEREO;
+		else if (cap->channel_mode & APTX_CHANNEL_MODE_DUAL_CHANNEL)
+			cap->channel_mode = APTX_CHANNEL_MODE_DUAL_CHANNEL;
+		else {
+			error("No supported channel modes: 0x%x", cap->channel_mode);
+			goto fail;
+		}
+
+		break;
+	}
+#endif
+
 	default:
 		debug("Endpoint path not supported: %s", path);
 		g_dbus_method_invocation_return_error(inv, G_DBUS_ERROR,
@@ -243,7 +284,7 @@ static int bluez_endpoint_set_configuration(GDBusMethodInvocation *inv, void *us
 	struct ba_device *d;
 
 	const int profile = g_dbus_object_path_to_profile(path);
-	const uint8_t codec = g_dbus_object_path_to_a2dp_codec(path);
+	const uint16_t codec = g_dbus_object_path_to_a2dp_codec(path);
 
 	const char *transport;
 	char *device = NULL, *state = NULL;
@@ -288,7 +329,7 @@ static int bluez_endpoint_set_configuration(GDBusMethodInvocation *inv, void *us
 				goto fail;
 			}
 
-			if (codec != g_variant_get_byte(value)) {
+			if ((codec & 0xFF) != g_variant_get_byte(value)) {
 				error("Invalid configuration: %s", "Codec mismatch");
 				goto fail;
 			}
@@ -394,6 +435,35 @@ static int bluez_endpoint_set_configuration(GDBusMethodInvocation *inv, void *us
 				if (cap->channels != AAC_CHANNELS_1 &&
 						cap->channels != AAC_CHANNELS_2) {
 					error("Invalid configuration: %s", "Invalid channels");
+					goto fail;
+				}
+
+				break;
+			}
+#endif
+
+#if ENABLE_APTX
+			case A2DP_CODEC_VENDOR_APTX: {
+
+				if (size != sizeof(a2dp_aptx_t)) {
+					error("Invalid configuration: %s", "Invalid size");
+					goto fail;
+				}
+
+				a2dp_aptx_t *cap = (a2dp_aptx_t *)capabilities;
+
+				if (cap->frequency != APTX_SAMPLING_FREQ_16000 &&
+						cap->frequency != APTX_SAMPLING_FREQ_32000 &&
+						cap->frequency != APTX_SAMPLING_FREQ_44100 &&
+						cap->frequency != APTX_SAMPLING_FREQ_48000) {
+					error("Invalid configuration: %s", "Invalid sampling frequency");
+					goto fail;
+				}
+
+				if (cap->channel_mode != APTX_CHANNEL_MODE_DUAL_CHANNEL &&
+						cap->channel_mode != APTX_CHANNEL_MODE_STEREO &&
+						cap->channel_mode != APTX_CHANNEL_MODE_JOINT_STEREO) {
+					error("Invalid configuration: %s", "Invalid channel mode");
 					goto fail;
 				}
 
@@ -519,8 +589,8 @@ static void bluez_endpoint_release(GDBusMethodInvocation *inv, void *userdata) {
 	debug("Releasing endpoint: %s", path);
 
 	if ((obj = g_hash_table_lookup(config.dbus_objects, hash)) != NULL) {
-		g_hash_table_remove(config.dbus_objects, hash);
 		g_dbus_connection_unregister_object(conn, obj->id);
+		g_hash_table_remove(config.dbus_objects, hash);
 	}
 
 	g_object_unref(inv);
@@ -580,7 +650,7 @@ static const GDBusInterfaceVTable endpoint_vtable = {
 static int bluez_register_a2dp_endpoint(
 		const char *uuid,
 		enum bluetooth_profile profile,
-		unsigned char codec,
+		uint16_t codec,
 		const void *configuration,
 		size_t configuration_size) {
 
@@ -674,6 +744,10 @@ void bluez_register_a2dp(void) {
 	bluez_register_a2dp_endpoint(BLUETOOTH_UUID_A2DP_SINK, BLUETOOTH_PROFILE_A2DP_SINK,
 			A2DP_CODEC_MPEG24, &bluez_a2dp_aac, sizeof(bluez_a2dp_aac));
 #endif
+#if ENABLE_APTX
+	bluez_register_a2dp_endpoint(BLUETOOTH_UUID_A2DP_SOURCE, BLUETOOTH_PROFILE_A2DP_SOURCE,
+			A2DP_CODEC_VENDOR_APTX, &bluez_a2dp_aptx, sizeof(bluez_a2dp_aptx));
+#endif
 	bluez_register_a2dp_endpoint(BLUETOOTH_UUID_A2DP_SOURCE, BLUETOOTH_PROFILE_A2DP_SOURCE,
 			A2DP_CODEC_SBC, &bluez_a2dp_sbc, sizeof(bluez_a2dp_sbc));
 	bluez_register_a2dp_endpoint(BLUETOOTH_UUID_A2DP_SINK, BLUETOOTH_PROFILE_A2DP_SINK,
@@ -764,8 +838,8 @@ static void bluez_profile_release(GDBusMethodInvocation *inv, void *userdata) {
 	debug("Releasing profile: %s", path);
 
 	if ((obj = g_hash_table_lookup(config.dbus_objects, hash)) != NULL) {
-		g_hash_table_remove(config.dbus_objects, hash);
 		g_dbus_connection_unregister_object(conn, obj->id);
+		g_hash_table_remove(config.dbus_objects, hash);
 	}
 
 	g_object_unref(inv);

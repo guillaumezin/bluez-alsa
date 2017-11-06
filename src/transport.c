@@ -56,6 +56,11 @@ static int io_thread_create(struct ba_transport *t) {
 				routine = io_thread_a2dp_source_aac;
 				break;
 #endif
+#if ENABLE_APTX
+			case A2DP_CODEC_VENDOR_APTX:
+				routine = io_thread_a2dp_source_aptx;
+				break;
+#endif
 			default:
 				warn("Codec not supported: %u", t->codec);
 			}
@@ -212,7 +217,7 @@ struct ba_transport *transport_new(
 		const char *dbus_owner,
 		const char *dbus_path,
 		enum bluetooth_profile profile,
-		uint8_t codec) {
+		uint16_t codec) {
 
 	struct ba_transport *t;
 	int err;
@@ -259,7 +264,7 @@ struct ba_transport *transport_new_a2dp(
 		const char *dbus_owner,
 		const char *dbus_path,
 		enum bluetooth_profile profile,
-		uint8_t codec,
+		uint16_t codec,
 		const uint8_t *config,
 		size_t config_size) {
 
@@ -460,6 +465,7 @@ unsigned int transport_get_channels(const struct ba_transport *t) {
 				return 2;
 			}
 			break;
+#if ENABLE_MP3
 		case A2DP_CODEC_MPEG12:
 			switch (((a2dp_mpeg_t *)t->a2dp.cconfig)->channel_mode) {
 			case MPEG_CHANNEL_MODE_MONO:
@@ -470,6 +476,8 @@ unsigned int transport_get_channels(const struct ba_transport *t) {
 				return 2;
 			}
 			break;
+#endif
+#if ENABLE_AAC
 		case A2DP_CODEC_MPEG24:
 			switch (((a2dp_aac_t *)t->a2dp.cconfig)->channels) {
 			case AAC_CHANNELS_1:
@@ -478,6 +486,19 @@ unsigned int transport_get_channels(const struct ba_transport *t) {
 				return 2;
 			}
 			break;
+#endif
+#if ENABLE_APTX
+		case A2DP_CODEC_VENDOR_APTX:
+			switch (((a2dp_aptx_t *)t->a2dp.cconfig)->channel_mode) {
+			case APTX_CHANNEL_MODE_MONO:
+				return 1;
+			case APTX_CHANNEL_MODE_STEREO:
+			case APTX_CHANNEL_MODE_JOINT_STEREO:
+			case APTX_CHANNEL_MODE_DUAL_CHANNEL:
+				return 2;
+			}
+			break;
+#endif
 		}
 		break;
 	case TRANSPORT_TYPE_RFCOMM:
@@ -507,6 +528,7 @@ unsigned int transport_get_sampling(const struct ba_transport *t) {
 				return 48000;
 			}
 			break;
+#if ENABLE_MP3
 		case A2DP_CODEC_MPEG12:
 			switch (((a2dp_mpeg_t *)t->a2dp.cconfig)->frequency) {
 			case MPEG_SAMPLING_FREQ_16000:
@@ -523,6 +545,8 @@ unsigned int transport_get_sampling(const struct ba_transport *t) {
 				return 48000;
 			}
 			break;
+#endif
+#if ENABLE_AAC
 		case A2DP_CODEC_MPEG24:
 			switch (AAC_GET_FREQUENCY(*(a2dp_aac_t *)t->a2dp.cconfig)) {
 			case AAC_SAMPLING_FREQ_8000:
@@ -551,6 +575,21 @@ unsigned int transport_get_sampling(const struct ba_transport *t) {
 				return 96000;
 			}
 			break;
+#endif
+#if ENABLE_APTX
+		case A2DP_CODEC_VENDOR_APTX:
+			switch (((a2dp_aptx_t *)t->a2dp.cconfig)->frequency) {
+			case APTX_SAMPLING_FREQ_16000:
+				return 16000;
+			case APTX_SAMPLING_FREQ_32000:
+				return 32000;
+			case APTX_SAMPLING_FREQ_44100:
+				return 44100;
+			case APTX_SAMPLING_FREQ_48000:
+				return 48000;
+			}
+			break;
+#endif
 		}
 		break;
 	case TRANSPORT_TYPE_RFCOMM:
