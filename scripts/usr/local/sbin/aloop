@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export LIBASOUND_THREAD_SAFE=0
 source /etc/a2dp-parameters
 
 rm ${NUMFILE}
